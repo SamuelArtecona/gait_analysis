@@ -1,0 +1,158 @@
+<mujoco model="go1">
+  <compiler angle="radian" meshdir="assets" autolimits="true"/>
+
+  <option iterations="1" ls_iterations="5">
+    <flag eulerdamp="disable"/>
+  </option>
+
+  <default>
+    <default class="go1">
+      <geom contype="0" conaffinity="0" type="mesh"/>
+      <default class="go1/collision">
+        <geom group="3" contype="0" conaffinity="1"/>
+        <default class="go1/collision/foot">
+          <geom type="sphere" size="0.023" pos="0 0 -0.213" solimp="0.015 1 0.031" friction="0.8 0.02 0.01"/>
+        </default>
+      </default>
+
+      <!-- General Paramters -->
+      <joint axis="0 1 0" damping="2" armature="0.01"/>
+      <position kp="100" forcerange="-23.7 23.7"/>
+
+      <!-- Joint Parameters -->
+      <default class="go1/abduction">
+        <joint axis="1 0 0" damping="1" range="-0.863 0.863"/>
+        <position ctrlrange="-0.863 0.863"/>
+      </default>
+      <default class="go1/hip">
+        <joint range="-0.686 4.501"/>
+        <position ctrlrange="-0.686 4.501"/>
+      </default>
+      <default class="go1/knee">
+        <joint range="-2.818 -0.888"/>
+        <position forcerange="-35.55 35.55" ctrlrange="-2.818 -0.888"/>
+      </default>
+    </default>
+  </default>
+
+  <asset>
+    <mesh class="go1" file="trunk.stl"/>
+    <mesh class="go1" file="hip.stl"/>
+    <mesh class="go1" file="thigh_mirror.stl"/>
+    <mesh class="go1" file="calf.stl"/>
+    <mesh class="go1" file="thigh.stl"/>
+  </asset>
+
+  <worldbody>
+    <light name="spotlight" mode="targetbodycom" target="trunk" pos="0 -1 2"/>
+    <body name="trunk" pos="0 0 0.445" childclass="go1">
+      <camera name="tracking" mode="trackcom" pos="0 -1 0.8" xyaxes="1 0 0 0 1 1"/>
+      <site name="head" pos="0.3 0 0" rgba="1 0 0 1" size="0.02" group="5"/>
+      <inertial pos="0.0223 0.002 -0.0005" quat="-0.00342088 0.705204 0.000106698 0.708996" mass="5.204"
+        diaginertia="0.0716565 0.0630105 0.0168101"/>
+      <freejoint/>
+      <geom class="go1" mesh="trunk"/>
+      <site name="imu" pos="0 0 0"/>
+      <body name="front_right_hip" pos="0.1881 -0.04675 0">
+        <inertial pos="-0.0049166 0.00762615 -8.865e-05" quat="0.507341 0.514169 0.495027 0.482891" mass="0.68"
+          diaginertia="0.000734064 0.000468438 0.000398719"/>
+        <joint class="go1/abduction" name="front_right_hip_joint"/>
+        <geom class="go1" mesh="hip" quat="1 0 0 0"/>
+        <body name="front_right_thigh" pos="0 -0.08 0">
+          <inertial pos="-0.00304722 0.019315 -0.0305004" quat="0.65243 -0.0272313 0.0775126 0.753383" mass="1.009"
+            diaginertia="0.00478717 0.00460903 0.000709268"/>
+          <joint class="go1/hip" name="front_right_thigh_joint"/>
+          <geom class="go1" mesh="thigh_mirror"/>
+          <body name="front_right_calf" pos="0 0 -0.213">
+            <inertial pos="0.00429862 0.000976676 -0.146197" quat="0.691246 0.00357467 0.00511118 0.722592"
+              mass="0.195862" diaginertia="0.00149767 0.00148468 3.58427e-05"/>
+            <joint class="go1/knee" name="front_right_calf_joint"/>
+            <geom class="go1" mesh="calf"/>
+            <geom name="foot_front_right" class="go1/collision/foot"/>
+            <site name="foot_front_right" pos="0 0 -0.213" type="sphere" size="0.023" group="5"/>
+          </body>
+        </body>
+      </body>
+      <body name="front_left_hip" pos="0.1881 0.04675 0">
+        <inertial pos="-0.0049166 -0.00762615 -8.865e-05" quat="0.482891 0.495027 0.514169 0.507341" mass="0.68"
+          diaginertia="0.000734064 0.000468438 0.000398719"/>
+        <joint class="go1/abduction" name="front_left_hip_joint"/>
+        <geom class="go1" mesh="hip"/>
+        <body name="front_left_thigh" pos="0 0.08 0">
+          <inertial pos="-0.00304722 -0.019315 -0.0305004" quat="0.753383 0.0775126 -0.0272313 0.65243" mass="1.009"
+            diaginertia="0.00478717 0.00460903 0.000709268"/>
+          <joint class="go1/hip" name="front_left_thigh_joint"/>
+          <geom class="go1" mesh="thigh"/>
+          <body name="front_left_calf" pos="0 0 -0.213">
+            <inertial pos="0.00429862 0.000976676 -0.146197" quat="0.691246 0.00357467 0.00511118 0.722592"
+              mass="0.195862" diaginertia="0.00149767 0.00148468 3.58427e-05"/>
+            <joint class="go1/knee" name="front_left_calf_joint"/>
+            <geom class="go1" mesh="calf"/>
+            <geom name="foot_front_left" class="go1/collision/foot"/>
+            <site name="foot_front_left" pos="0 0 -0.213" type="sphere" size="0.023" group="5"/>
+          </body>
+        </body>
+      </body>
+      <body name="hind_right_hip" pos="-0.1881 -0.04675 0">
+        <inertial pos="0.0049166 0.00762615 -8.865e-05" quat="0.495027 0.482891 0.507341 0.514169" mass="0.68"
+          diaginertia="0.000734064 0.000468438 0.000398719"/>
+        <joint class="go1/abduction" name="hind_right_hip_joint"/>
+        <geom class="go1" quat="0 0 0 -1" mesh="hip"/>
+        <body name="hind_right_thigh" pos="0 -0.08 0">
+          <inertial pos="-0.00304722 0.019315 -0.0305004" quat="0.65243 -0.0272313 0.0775126 0.753383" mass="1.009"
+            diaginertia="0.00478717 0.00460903 0.000709268"/>
+          <joint class="go1/hip" name="hind_right_thigh_joint"/>
+          <geom class="go1" mesh="thigh_mirror"/>
+          <body name="hind_right_calf" pos="0 0 -0.213">
+            <inertial pos="0.00429862 0.000976676 -0.146197" quat="0.691246 0.00357467 0.00511118 0.722592"
+              mass="0.195862" diaginertia="0.00149767 0.00148468 3.58427e-05"/>
+            <joint class="go1/knee" name="hind_right_calf_joint"/>
+            <geom class="go1" mesh="calf"/>
+            <geom name="foot_hind_right" class="go1/collision/foot"/>
+            <site name="foot_hind_right" pos="0 0 -0.213" type="sphere" size="0.023" group="5"/>
+          </body>
+        </body>
+      </body>
+      <body name="hind_left_hip" pos="-0.1881 0.04675 0">
+        <inertial pos="0.0049166 -0.00762615 -8.865e-05" quat="0.514169 0.507341 0.482891 0.495027" mass="0.68"
+          diaginertia="0.000734064 0.000468438 0.000398719"/>
+        <joint class="go1/abduction" name="hind_left_hip_joint"/>
+        <geom class="go1" quat="0 0 1 0" mesh="hip"/>
+        <body name="hind_left_thigh" pos="0 0.08 0">
+          <inertial pos="-0.00304722 -0.019315 -0.0305004" quat="0.753383 0.0775126 -0.0272313 0.65243" mass="1.009"
+            diaginertia="0.00478717 0.00460903 0.000709268"/>
+          <joint class="go1/hip" name="hind_left_thigh_joint"/>
+          <geom class="go1" mesh="thigh"/>
+          <body name="hind_left_calf" pos="0 0 -0.213">
+            <inertial pos="0.00429862 0.000976676 -0.146197" quat="0.691246 0.00357467 0.00511118 0.722592"
+              mass="0.195862" diaginertia="0.00149767 0.00148468 3.58427e-05"/>
+            <joint class="go1/knee" name="hind_left_calf_joint"/>
+            <geom class="go1" mesh="calf"/>
+            <geom name="foot_hind_left" class="go1/collision/foot"/>
+            <site name="foot_hind_left" pos="0 0 -0.213" type="sphere" size="0.023" group="5"/>
+          </body>
+        </body>
+      </body>
+    </body>
+  </worldbody>
+
+  <actuator>
+    <position class="go1/abduction" name="front_right_hip" joint="front_right_hip_joint"/>
+    <position class="go1/hip" name="front_right_thigh" joint="front_right_thigh_joint"/>
+    <position class="go1/knee" name="front_right_calf" joint="front_right_calf_joint"/>
+    <position class="go1/abduction" name="front_left_hip" joint="front_left_hip_joint"/>
+    <position class="go1/hip" name="front_left_thigh" joint="front_left_thigh_joint"/>
+    <position class="go1/knee" name="front_left_calf" joint="front_left_calf_joint"/>
+    <position class="go1/abduction" name="hind_right_hip" joint="hind_right_hip_joint"/>
+    <position class="go1/hip" name="hind_right_thigh" joint="hind_right_thigh_joint"/>
+    <position class="go1/knee" name="hind_right_calf" joint="hind_right_calf_joint"/>
+    <position class="go1/abduction" name="hind_left_hip" joint="hind_left_hip_joint"/>
+    <position class="go1/hip" name="hind_left_thigh" joint="hind_left_thigh_joint"/>
+    <position class="go1/knee" name="hind_left_calf" joint="hind_left_calf_joint"/>
+  </actuator>
+
+  <keyframe>
+    <key name="home" qpos="0 0 0.27 1 0 0 0 0 0.9 -1.8 0 0.9 -1.8 0 0.9 -1.8 0 0.9 -1.8"
+      ctrl="0 0.9 -1.8 0 0.9 -1.8 0 0.9 -1.8 0 0.9 -1.8"/>
+  </keyframe>
+</mujoco>
