@@ -15,7 +15,8 @@
       markrgb="0.8 0.8 0.8" width="300" height="300"/>
     <material name="groundplane" texture="groundplane" texuniform="true" texrepeat="5 5" reflectance="0.2"/>
     <!-- <hfield name="hfield" file="assets/hfield_barkour.png" size="10 10 .05 0.1"/> -->
-    <hfield name="hfield" file="assets/hfield_barkour.png" size="20 20 .075 0.1"/>
+    <!-- <hfield name="hfield" file="assets/hfield_barkour.png" size="20 20 .075 0.1"/> -->
+    <hfield name="hfield" file="assets/hfield_barkour.png" size="30 30 0.1 0.1"/>
   </asset>
 
   <worldbody>
