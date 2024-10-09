@@ -44,7 +44,14 @@ flags.DEFINE_string(
 
 def main(argv=None):
     # Config:
-    reward_config = unitree_go2.RewardConfig()
+    reward_config = unitree_go2.RewardConfig(
+        tracking_forward_velocity=2.0,
+        lateral_velocity=-1.0,
+        angular_velocity=-1.0,
+        mechanical_power=-2e-2,
+        torque=-2e-3,
+        termination=-1.0,
+    )
     velocity_target = 0.375
 
     # Metadata:
@@ -66,7 +73,7 @@ def main(argv=None):
         normalize_advantages=True,
     )
     training_metadata = checkpoint_utilities.training_metadata(
-        num_epochs=50,
+        num_epochs=20,
         num_training_steps=20,
         episode_length=1000,
         num_policy_steps=25,
