@@ -178,6 +178,7 @@ class UnitreeGo2Env(PipelineEnv):
             'previous_action': jnp.zeros(12),
             'previous_velocity': jnp.zeros(12),
             'command': self.velocity_target,
+            'first_contact': jnp.zeros(4, dtype=bool),
             'previous_contact': jnp.zeros(4, dtype=bool),
             'flight_time': jnp.zeros(4),
             'rewards': {k: 0.0 for k in self.reward_config.keys()},
@@ -282,6 +283,7 @@ class UnitreeGo2Env(PipelineEnv):
         state.info['previous_action'] = action
         state.info['previous_velocity'] = joint_velocities
         state.info['flight_time'] *= ~contact_filt_mm
+        state.info['first_contact'] = first_contact
         state.info['previous_contact'] = contact
         state.info['rewards'] = rewards
         state.info['step'] += 1
