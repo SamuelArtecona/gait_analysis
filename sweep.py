@@ -1,7 +1,9 @@
-from absl import app, flags
 from typing import List, Callable
-import os
 from enum import Enum
+from absl import app, flags
+import os
+from pathlib import Path
+import yaml
 import functools
 
 import jax
@@ -13,6 +15,8 @@ import numpy as np
 
 import wandb
 import orbax.checkpoint as ocp
+
+from brax.envs.base import PipelineEnv
 
 from src.envs import unitree_go2_energy_test as unitree_go2
 from src.algorithms.ppo import network_utilities as ppo_networks
@@ -34,21 +38,11 @@ os.environ['XLA_FLAGS'] = (
 jax.config.update("jax_enable_x64", True)
 wandb.require('core')
 
-FLAGS = flags.FLAGS
-flags.DEFINE_string(
-    'checkpoint_name', None, 'Desired checkpoint folder name to load.', short_name='c',
-)
-flags.DEFINE_integer(
-    'checkpoint_iteration', None, 'Desired checkpoint iteration.', short_name='i',
-)
-flags.DEFINE_string(
-    'tag', '', 'Tag for wandb run.', short_name='t',
-)
-
 
 def objective(
     velocity_target: float,
     phase_targets: List[float],
+    env: PipelineEnv,
     make_policy: Callable,
     params: PPONetworkParams,
     num_steps: int = 1000,
@@ -61,10 +55,6 @@ def objective(
         hind_right = 3
 
     # Create Environment:
-    env = unitree_go2.UnitreeGo2Env(
-        velocity_target=velocity_target,
-        filename='unitree_go2/scene_mjx.xml',
-    )
     reset_fn = jax.jit(env.reset)
 
     # Make Inference Function:
@@ -145,22 +135,37 @@ def objective(
 
     # Sorted Cost Error:
     error = np.sort(avg_phases) - np.asarray(phase_targets)
+    
+    # Phase Target Cost:
     cost = np.sum(np.square(error))
+
+    # Cost Ideas: 
+    # Phase Target + Velocity Target
+    # Phase Target + Velocity Target + Stride Frequency
 
     return cost
 
 
-def main(argv=None):
+def sweep_main(argv=None):
+    # Setup Wandb:
+    run = wandb.init(
+        project='gait_analysis',
+        group='parameter_sweep',
+    )
+
+    # Gait Parameters:
+    velocity_target = 0.375
+    phase_targets = [0.25, 0.5, 0.75]
+
     # Config:
     reward_config = unitree_go2.RewardConfig(
         tracking_forward_velocity=2.0,
-        lateral_velocity=-1.0,
-        angular_velocity=-1.0,
-        mechanical_power=-2e-2,
-        torque=-2e-3,
+        lateral_velocity=run.config.lateral_velocity,
+        angular_velocity=run.config.angular_velocity,
+        mechanical_power=run.config.mechanical_power,
+        torque=run.config.torque,
         termination=-1.0,
     )
-    velocity_target = 0.375
 
     # Metadata:
     network_metadata = checkpoint_utilities.network_metadata(
@@ -199,18 +204,13 @@ def main(argv=None):
         optimizer='optax.adam(3e-4)',
     )
 
-    # Start Wandb and save metadata:
-    run = wandb.init(
-        project='gait_analysis',
-        group='unitree_go2',
-        tags=[FLAGS.tag],
-        config={
-            'reward_config': reward_config,
-            'network_metadata': network_metadata,
-            'loss_metadata': loss_metadata,
-            'training_metadata': training_metadata,
-        },
-    )
+    # Log Metadata:
+    run.config.update({
+        'reward_config': reward_config,
+        'network_metadata': network_metadata,
+        'loss_metadata': loss_metadata,
+        'training_metadata': training_metadata,
+    })
 
     # Initialize Functions with Params:
     randomization_fn = unitree_go2.domain_randomize
@@ -311,12 +311,34 @@ def main(argv=None):
         wandb=run,
     )
 
-    policy_generator, params, metrics = train_fn(
+    make_policy, params, metrics = train_fn(
         environment=env,
         evaluation_environment=eval_env,
     )
 
+    # Outer Objective Function:
+    objective_env = unitree_go2.UnitreeGo2Env(
+        velocity_target=velocity_target,
+        filename='unitree_go2/scene_mjx.xml',
+    )
+
+    cost = objective(
+        velocity_target=velocity_target,
+        phase_targets=phase_targets,
+        env=objective_env ,
+        make_policy=make_policy,
+        params=params,
+    )
+
+    wandb.log({'score': cost})
+
     run.finish()
+
+
+def main(argv=None):
+    config = yaml.safe_load(Path('sweep_config.yaml').read_text())
+    sweep_id = wandb.sweep(sweep=config, project='gait_analysis')
+    wandb.agent(sweep_id, function=sweep_main)
 
 
 if __name__ == '__main__':

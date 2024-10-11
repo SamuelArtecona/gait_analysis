@@ -1,0 +1,20 @@
+program: sweep.py
+name: reward_sweep
+method: bayes
+metric:
+  goal: minimize
+  name: score
+parameters:
+  lateral_velocity:
+    min: -2.0
+    max: 0.0
+  angular_velocity:
+    min: -2.0
+    max: 0.0
+  mechanical_power:
+    min: -0.002
+    max: 0.0
+  torque:
+    min: -0.002
+    max: 0.0
+run_cap: 100
