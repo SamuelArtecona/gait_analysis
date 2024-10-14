@@ -1,6 +1,6 @@
 # Gait Analysis:
 Repository aims to analyze emergent robot gaits trained via DRL and make them more biologically relevant.
-This repository contains a slightly modified and stripped version of Brax`s `training` utilities.
+This repository contains a slightly modified and stripped version of Brax's `training` utilities.
 
 ## Installation Requirements:
 It is recommended you have `python3.12` or newer. This repository uses `wandb` for logging and requires an account.
