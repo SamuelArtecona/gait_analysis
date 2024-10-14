@@ -22,7 +22,10 @@ flags.DEFINE_integer(
 
 def main(argv=None):
     # Load from Env:
-    env = unitree_go2.UnitreeGo2Env(velocity_target=0.375)
+    env = unitree_go2.UnitreeGo2Env(
+        velocity_target=0.375,
+        filename='unitree_go2/scene_mjx.xml',
+    )
     reset_fn = jax.jit(env.reset)
     step_fn = jax.jit(env.step)
 
@@ -38,17 +41,13 @@ def main(argv=None):
     # Initialize Simulation:
     key = jax.random.key(0)
 
-    velocity = 1.0
     key, subkey = jax.random.split(key)
     state = reset_fn(subkey)
-    command = [velocity, 0.0, 0.0]
-    state.info['command'] = jnp.array(command)
 
     num_steps = 1000
     states = []
     for i in range(num_steps):
         # Stop Command Sampling:
-        state.info['command'] = jnp.array(command)
         key, subkey = jax.random.split(key)
         action, _ = inference_fn(state.obs, subkey)
         state = step_fn(state, action)
