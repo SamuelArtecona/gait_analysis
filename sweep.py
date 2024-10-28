@@ -70,10 +70,10 @@ def objective(
         key, subkey = jax.random.split(key)
         action, _ = inference_fn(state.obs, subkey)
         state = env.step(state, action)
-        data = (state.pipeline_state, state.info['first_contact'])
+        data = (state.pipeline_state, state.info['first_contact'], state.done)
         return (key, state), data
 
-    _, (states, first_contact) = jax.lax.scan(
+    _, (states, first_contact, done) = jax.lax.scan(
         f=loop,
         init=(key, state),
         xs=(),
@@ -94,37 +94,55 @@ def objective(
     hind_right = []
     hind_left = []
     for i in indicies:
-        front_left.append(
-            np.where(first_contact[i:, Feet.front_left.value])[0][0]
+        lengths = list(
+            map(
+                lambda x: x[0] if np.size(x) > 0 else 0,
+                [
+                    np.where(first_contact[i:, Feet.front_left.value])[0],
+                    np.where(first_contact[i:, Feet.hind_right.value])[0],
+                    np.where(first_contact[i:, Feet.hind_left.value])[0],
+                ],
+            )
         )
-        hind_right.append(
-            np.where(first_contact[i:, Feet.hind_right.value])[0][0]
-        )
-        hind_left.append(
-            np.where(first_contact[i:, Feet.hind_left.value])[0][0]
-        )
+
+        front_left.append(lengths[0])
+        hind_right.append(lengths[1])
+        hind_left.append(lengths[2])
+
+    # Calculate array lengths:
+    front_left = np.asarray(front_left)
+    hind_right = np.asarray(hind_right)
+    hind_left = np.asarray(hind_left)
+    front_left_length = front_left.shape[0]
+    hind_right_length = hind_right.shape[0]
+    hind_left_length = hind_left.shape[0]
+
+    array_lengths = np.minimum(
+        [front_left_length, hind_right_length, hind_left_length],
+        stride_lengths.shape[0],
+    )
+
+    front_left = front_left[:array_lengths[0]]
+    hind_right = hind_right[:array_lengths[1]]
+    hind_left = hind_left[:array_lengths[2]]
 
     # Calculate Phases:
-    front_left = np.asarray(front_left)[:-1]
-    hind_right = np.asarray(hind_right)[:-1]
-    hind_left = np.asarray(hind_left)[:-1]
-
     front_left_phase = front_left / stride_lengths
     hind_right_phase = hind_right / stride_lengths
     hind_left_phase = hind_left / stride_lengths
 
     # Account for phase offset: Subtract 1.0
-    front_left_phase, hind_right_phase, hind_left_phase = list(
-        map(
-            lambda x: np.where(x > 1.0, x - 1.0, x),
-            [front_left_phase, hind_right_phase, hind_left_phase],
-        ),
-    )
+    # front_left_phase, hind_right_phase, hind_left_phase = list(
+    #     map(
+    #         lambda x: np.where(x > 1.0, x - 1.0, x),
+    #         [front_left_phase, hind_right_phase, hind_left_phase],
+    #     ),
+    # )
 
     # Account for phase offset: Modulus
-    # front_left_phase, hind_right_phase, hind_left_phase = list(
-    #     map(lambda x: np.where(x > 1.0, x % 1, x), [front_left_phase, hind_right_phase, hind_left_phase]),
-    # )
+    front_left_phase, hind_right_phase, hind_left_phase = list(
+        map(lambda x: np.where(x > 1.0, x % 1, x), [front_left_phase, hind_right_phase, hind_left_phase]),
+    )
 
     avg_phases = list(
         map(
@@ -134,10 +152,19 @@ def objective(
     )
 
     # Sorted Cost Error:
-    error = np.sort(avg_phases) - np.asarray(phase_targets)
+    phase_weight = 1.0
+    phase_error = np.sort(avg_phases) - np.asarray(phase_targets)
+
+    # Missed Stride Cost:
+    period_weight = 1.0
+    period_error = np.where(array_lengths == stride_lengths.shape[0], 0.0, 1.0)
+
+    # Failed Locomotion Cost:
+    termination_weight = 100.0
+    termination_error = np.any(done)
     
-    # Phase Target Cost:
-    cost = np.sum(np.square(error))
+    # Phase Target + Missed Stride + Termination Cost:
+    cost = phase_weight * np.sum(np.square(phase_error)) + period_weight * np.sum(period_error) + termination_weight * termination_error
 
     # Cost Ideas: 
     # Phase Target + Velocity Target

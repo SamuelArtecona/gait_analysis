@@ -11,7 +11,7 @@ import optax
 import wandb
 import orbax.checkpoint as ocp
 
-from src.envs import unitree_go2_energy_test as unitree_go2
+from src.envs import unitree_go2_vertical as unitree_go2
 from src.algorithms.ppo import network_utilities as ppo_networks
 from src.algorithms.ppo.loss_utilities import loss_function
 from src.distribution_utilities import ParametricDistribution
@@ -48,10 +48,12 @@ def main(argv=None):
         tracking_forward_velocity=2.0,
         lateral_velocity=-1.0,
         angular_velocity=-1.0,
-        mechanical_power=-2e-2,
-        torque=-2e-3,
+        linear_z_velocity=-1.0,
+        mechanical_power=-2e-3,
+        torque=-2e-4,
         termination=-1.0,
     )
+    
     velocity_target = 0.375
 
     # Metadata:
