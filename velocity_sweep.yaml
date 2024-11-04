@@ -1,0 +1,8 @@
+program: velocity_sweep.py
+name: velocity_sweep
+method: grid
+parameters:
+  velocity_target:
+    values: [0.2, 0.4, 0.6, 0.8, 1.0, 1.2, 1.4, 1.6, 1.8, 2.0]
+  linear_z_velocity:
+    values: [-0.5, 0.0]
