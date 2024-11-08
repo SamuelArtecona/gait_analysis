@@ -135,6 +135,12 @@ class UnitreeGo2Env(PipelineEnv):
         self.init_qd = jnp.zeros(sys.nv)
         self.default_pose = jnp.array(sys.mj_model.keyframe('home').qpos[7:])
         self.default_ctrl = jnp.array(sys.mj_model.keyframe('home').ctrl)
+        
+        # Manually Set Default Control:
+        self.default_pose = jnp.array([0, 0.9, -1.8] * 4)
+        jnp.array([0, 0.9, -1.8, 0, 0.9, -1.8, 0, 0.9, -1.8, 0, 0.9, -1.8])
+        self.default_ctrl = 
+        
         self.joint_lb = jnp.array([
             -1.0472, -1.5708, -2.7227,
             -1.0472, -1.5708, -2.7227,

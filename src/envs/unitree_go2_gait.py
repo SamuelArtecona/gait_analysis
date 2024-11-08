@@ -26,29 +26,16 @@ PRNGKey = jax.Array
 @flax.struct.dataclass
 class RewardConfig:
     # Rewards:
-    tracking_linear_velocity: float = 1.5
-    tracking_angular_velocity: float = 0.8
+    tracking_forward_velocity: float = 2.0
     # Penalties / Regularization Terms:
-    orientation_regularization: float = -5.0
-    linear_z_velocity: float = -2.0
-    angular_xy_velocity: float = -0.05
-    torque: float = -2e-4
-    action_rate: float = -0.01
-    stand_still: float = -0.5
-    termination: float = -1.0
-    foot_slip: float = -0.1
-    # Gait Terms:
-    air_time: float = 0.2
-    target_air_time: float = 0.1
-    stance_time: float = 0.2
-    target_stance_time: float = 0.1
-    gait_time: float = 0.5
-    target_gait_time: float = 1.0
-    # Energy Terms:
+    linear_z_velocity: float = -0.8
+    lateral_velocity: float = -1.0
+    angular_velocity: float = -1.0
     mechanical_power: float = -2e-4
+    torque: float = -2e-3
+    termination: float = -1.0
     # Hyperparameter for exponential kernel:
     kernel_sigma: float = 0.25
-    kernel_alpha: float = 1.0
 
 
 def domain_randomize(sys: System, rng: PRNGKey) -> tuple[System, System]:
@@ -93,6 +80,7 @@ class UnitreeGo2Env(PipelineEnv):
 
     def __init__(
         self,
+        velocity_target: float,
         filename: str = 'unitree_go2/scene_mjx.xml',
         config: RewardConfig = RewardConfig(),
         obs_noise: float = 0.05,
@@ -122,17 +110,11 @@ class UnitreeGo2Env(PipelineEnv):
         n_frames = kwargs.pop('n_frames', int(self.step_dt / sys.opt.timestep))
         super().__init__(sys, backend='mjx', n_frames=n_frames)
 
+        self.velocity_target = velocity_target
+
         self.kernel_sigma = config.kernel_sigma
-        self.kernel_alpha = config.kernel_alpha
-        self.target_air_time = config.target_air_time
-        self.target_stance_time = config.target_stance_time
-        self.target_gait_time = config.target_gait_time
         config_dict = flax.serialization.to_state_dict(config)
         del config_dict['kernel_sigma']
-        del config_dict['kernel_alpha']
-        del config_dict['target_air_time']
-        del config_dict['target_stance_time']
-        del config_dict['target_gait_time']
         self.reward_config = config_dict
 
         self.base_idx = mujoco.mj_name2id(
@@ -145,6 +127,18 @@ class UnitreeGo2Env(PipelineEnv):
         self.init_qd = jnp.zeros(sys.nv)
         self.default_pose = jnp.array(sys.mj_model.keyframe('home').qpos[7:])
         self.default_ctrl = jnp.array(sys.mj_model.keyframe('home').ctrl)
+
+        # Set Custom Pose and Ctrl:
+        self.initial_body = jnp.array([0, 0, 0.4, 1, 0, 0, 0])
+        self.default_pose = jnp.array(
+            [0.0, 0.0, 0.0] * 4,
+        )
+        self.default_ctrl = self.default_pose
+        self.init_q = jnp.concatenate([
+            self.initial_body, self.default_pose,
+        ])
+
+        # Joint and Control Limits:
         self.joint_lb = jnp.array([
             -1.0472, -1.5708, -2.7227,
             -1.0472, -1.5708, -2.7227,
@@ -185,36 +179,7 @@ class UnitreeGo2Env(PipelineEnv):
         self.calf_body_idx = np.array(calf_body_idx)
         self.foot_radius = 0.022
         self.history_length = 15
-        self.num_observations = 31
-
-    def sample_command(self, rng: jax.Array) -> jax.Array:
-        forward_velocity_range = [-0.6, 1.5]
-        lateral_velocity_range = [-0.8, 0.8]
-        yaw_rate_range = [-0.7, 0.7]
-
-        _, forward_velocity_key, lateral_velocity_key, yaw_rate_key = jax.random.split(rng, 4)
-        forward_velocity = jax.random.uniform(
-            forward_velocity_key,
-            (1,),
-            minval=forward_velocity_range[0],
-            maxval=forward_velocity_range[1],
-        )
-        lateral_velocity = jax.random.uniform(
-            lateral_velocity_key,
-            (1,),
-            minval=lateral_velocity_range[0],
-            maxval=lateral_velocity_range[1],
-        )
-        yaw_rate = jax.random.uniform(
-            yaw_rate_key,
-            (1,),
-            minval=yaw_rate_range[0],
-            maxval=yaw_rate_range[1],
-        )
-        new_cmd = jnp.array([
-            forward_velocity[0], lateral_velocity[0], yaw_rate[0],
-        ])
-        return new_cmd
+        self.num_observations = 28
 
     def reset(self, rng: PRNGKey) -> State:  # pytype: disable=signature-mismatch
         rng, key = jax.random.split(rng)
@@ -225,11 +190,10 @@ class UnitreeGo2Env(PipelineEnv):
             'rng': rng,
             'previous_action': jnp.zeros(12),
             'previous_velocity': jnp.zeros(12),
-            'command': self.sample_command(key),
+            'command': self.velocity_target,
+            'first_contact': jnp.zeros(4, dtype=bool),
             'previous_contact': jnp.zeros(4, dtype=bool),
             'flight_time': jnp.zeros(4),
-            'stance_time': jnp.zeros(4),
-            'gait_time': jnp.zeros(4),
             'rewards': {k: 0.0 for k in self.reward_config.keys()},
             'kick': jnp.array([0.0, 0.0]),
             'step': 0,
@@ -260,7 +224,7 @@ class UnitreeGo2Env(PipelineEnv):
         return state
 
     def step(self, state: State, action: jax.Array) -> State:  # pytype: disable=signature-mismatch
-        rng, cmd_rng, kick_noise_key = jax.random.split(state.info['rng'], 3)
+        rng, kick_noise_key = jax.random.split(state.info['rng'], 2)
 
         # Distrubance:
         push_interval = 10
@@ -297,8 +261,6 @@ class UnitreeGo2Env(PipelineEnv):
         contact_filt_cm = (foot_contact_z < 3e-2) | state.info['previous_contact']
         first_contact = (state.info['flight_time'] > 0) * contact_filt_mm
         state.info['flight_time'] += self.dt
-        state.info['stance_time'] += self.dt * contact_filt_mm
-        state.info['gait_time'] += self.dt
 
         # done if joint limits are reached or robot is falling
         up = jnp.array([0.0, 0.0, 1.0])
@@ -309,41 +271,16 @@ class UnitreeGo2Env(PipelineEnv):
 
         # reward
         rewards = {
-            'tracking_linear_velocity': (
-                self._reward_tracking_velocity(state.info['command'], x, xd)
+            'tracking_forward_velocity': (
+                self._reward_tracking_velocity(x, xd)
             ),
-            'tracking_angular_velocity': (
-                self._reward_tracking_yaw_rate(state.info['command'], x, xd)
-            ),
+            'lateral_velocity': self._reward_lateral_velocity(x, xd),
+            'angular_velocity': self._reward_yaw_rate(x, xd),
             'linear_z_velocity': self._reward_vertical_velocity(xd),
-            'angular_xy_velocity': self._reward_angular_velocity(xd),
-            'orientation_regularization': self._reward_orientation_regularization(x),
-            'torque': self._reward_torques(pipeline_state.qfrc_actuator[6:]),
-            'action_rate': self._reward_action_rate(action, state.info['previous_action']),
-            'stand_still': self._reward_stand_still(
-                state.info['command'], joint_angles,
-            ),
-            'foot_slip': self._reward_foot_slip(
-                pipeline_state, contact_filt_cm,
-            ),
-            'air_time': self._reward_air_time(
-                state.info['flight_time'],
-                first_contact,
-                state.info['command'],
-            ),
-            'stance_time': self._reward_stance_time(
-                state.info['stance_time'],
-                first_contact,
-                state.info['command'],
-            ),
-            'gait_time': self._reward_gait_time(
-                state.info['gait_time'],
-                first_contact,
-                state.info['command'],
-            ),
             'mechanical_power': self._reward_mechanical_power(
                 joint_velocities, pipeline_state.qfrc_actuator[6:],
             ),
+            'torque': self._reward_torques(pipeline_state.qfrc_actuator[6:]),
             'termination': jnp.float64(
                 self._reward_termination(done, state.info['step'])
             ) if jax.config.x64_enabled else jnp.float32(
@@ -360,19 +297,12 @@ class UnitreeGo2Env(PipelineEnv):
         state.info['previous_action'] = action
         state.info['previous_velocity'] = joint_velocities
         state.info['flight_time'] *= ~contact_filt_mm
-        state.info['stance_time'] *= ~first_contact
-        state.info['gait_time'] *= ~first_contact
+        state.info['first_contact'] = first_contact
         state.info['previous_contact'] = contact
         state.info['rewards'] = rewards
         state.info['step'] += 1
         state.info['rng'] = rng
 
-        # sample new command if more than 500 timesteps achieved
-        state.info['command'] = jnp.where(
-            state.info['step'] > 500,
-            self.sample_command(cmd_rng),
-            state.info['command'],
-        )
         # reset the step counter when done
         state.info['step'] = jnp.where(
             done | (state.info['step'] > 500), 0, state.info['step']
@@ -403,7 +333,6 @@ class UnitreeGo2Env(PipelineEnv):
             Observation: [
                 yaw_rate,
                 projected_gravity,
-                command,
                 relative_motor_positions,
                 previous_action,
             ]
@@ -421,7 +350,6 @@ class UnitreeGo2Env(PipelineEnv):
         observation = jnp.concatenate([
             jnp.array([body_frame_yaw_rate]),
             projected_gravity,
-            state_info['command'],
             q - self.default_pose,
             state_info['previous_action'],
         ])
@@ -444,117 +372,42 @@ class UnitreeGo2Env(PipelineEnv):
 
         return observation
 
-    def _reward_vertical_velocity(self, xd: Motion) -> jax.Array:
-        # Penalize z axis base linear velocity
-        return jnp.square(xd.vel[0, 2])
-
-    def _reward_angular_velocity(self, xd: Motion) -> jax.Array:
-        # Penalize xy axes base angular velocity
-        return jnp.sum(jnp.square(xd.ang[0, :2]))
-
-    def _reward_orientation_regularization(self, x: Transform) -> jax.Array:
-        # Penalize non flat base orientation
-        up = jnp.array([0.0, 0.0, 1.0])
-        deviation = math.rotate(up, x.rot[0])
-        return jnp.sum(jnp.square(deviation[:2]))
-
-    def _reward_torques(self, torques: jax.Array) -> jax.Array:
-        # Penalize torques
-        return jnp.sqrt(jnp.sum(jnp.square(torques))) + jnp.sum(jnp.abs(torques))
-
-    def _reward_action_rate(
-        self, action: jax.Array, previous_action: jax.Array
-    ) -> jax.Array:
-        # Penalize changes in actions
-        return jnp.sum(jnp.square(action - previous_action))
-
     def _reward_tracking_velocity(
-        self, commands: jax.Array, x: Transform, xd: Motion
+        self, x: Transform, xd: Motion
     ) -> jax.Array:
         # Tracking of linear velocity commands (xy axes)
         base_velocity = math.rotate(xd.vel[0], math.quat_inv(x.rot[0]))
-        error = jnp.sum(jnp.square(commands[:2] - base_velocity[:2]))
+        error = jnp.sum(jnp.square(self.velocity_target - base_velocity[0]))
         return jnp.exp(-error / self.kernel_sigma)
 
-    def _reward_tracking_yaw_rate(
-        self, commands: jax.Array, x: Transform, xd: Motion
+    def _reward_lateral_velocity(
+        self, x: Transform, xd: Motion
     ) -> jax.Array:
-        # Tracking of angular velocity commands (yaw)
+        # Penalize lateral linear velocity
+        base_velocity = math.rotate(xd.vel[0], math.quat_inv(x.rot[0]))
+        return jnp.square(base_velocity[1])
+
+    def _reward_yaw_rate(
+        self, x: Transform, xd: Motion
+    ) -> jax.Array:
+        # Penalize angular velocity
         base_yaw_rate = math.rotate(xd.ang[0], math.quat_inv(x.rot[0]))
-        error = jnp.square(commands[2] - base_yaw_rate[2])
-        return jnp.exp(-error / self.kernel_sigma)
-
-    def _reward_air_time(
-        self, air_time: jax.Array, first_contact: jax.Array, commands: jax.Array
-    ) -> jax.Array:
-        # Flight Phase Reward: No reward for going past gait time
-        # air_time_calculation = (air_time - self.target_air_time) * (air_time < self.target_gait_time)
-        air_time_calculation = (air_time - self.target_air_time)
-        reward_air_time = jnp.sum(air_time_calculation * first_contact)
-        # No reward for zero velocity commands:
-        reward_air_time *= (
-            math.normalize(commands[:2])[1] > 0.05
-        )
-        return reward_air_time
-
-    def _reward_stance_time(
-        self, stance_time: jax.Array, first_contact: jax.Array, commands: jax.Array
-    ) -> jax.Array:
-        # Stance Phase Reward: No reward for going past gait time
-        # stance_time_calculation = (stance_time - self.target_stance_time) * (stance_time < self.target_gait_time)
-        stance_time_calculation = (stance_time - self.target_stance_time)
-        reward_stance_time = jnp.sum(
-            stance_time_calculation * first_contact
-        )
-        # No reward for zero velocity commands:
-        reward_stance_time *= (
-            math.normalize(commands[:2])[1] > 0.05
-        )
-        return reward_stance_time
-
-    def _reward_gait_time(
-        self, gait_time: jax.Array, first_contact: jax.Array, commands: jax.Array
-    ) -> jax.Array:
-        # Gait Length Reward:
-        reward_gait_time = jnp.sum((gait_time - self.target_gait_time) * first_contact)
-        # reward_gait_time = jnp.sum((self.target_gait_time - gait_time) * first_contact)
-        # No reward for zero velocity commands:
-        reward_gait_time *= (
-            math.normalize(commands[:2])[1] > 0.05
-        )
-        return reward_gait_time
-
-    def _reward_stand_still(
-        self,
-        commands: jax.Array,
-        joint_angles: jax.Array,
-    ) -> jax.Array:
-        # Penalize motion at zero commands
-        return jnp.sum(jnp.abs(joint_angles - self.default_pose)) * (
-            math.normalize(commands[:2])[1] < 0.1
-        )
+        return jnp.square(base_yaw_rate[2])
+    
+    def _reward_vertical_velocity(self, xd: Motion) -> jax.Array:
+        # Penalize z axis base linear velocity
+        return jnp.square(xd.vel[0, 2])
 
     def _reward_mechanical_power(
         self, joint_velocities: jax.Array, torques: jax.Array
     ) -> jax.Array:
         # Mechanical Power Reward:
-        return torques @ joint_velocities
-
-    def _reward_foot_slip(
-        self, pipeline_state: base.State, contact_filter: jax.Array
-    ) -> jax.Array:
-        # Foot Velocity:
-        # pytype: disable=attribute-error
-        pos = pipeline_state.site_xpos[self.feet_site_idx]
-        feet_offset = pos - pipeline_state.xpos[self.calf_body_idx]
-        # pytype: enable=attribute-error
-        offset = base.Transform.create(pos=feet_offset)
-        foot_indices = self.calf_body_idx - 1
-        foot_vel = offset.vmap().do(pipeline_state.xd.take(foot_indices)).vel
-
-        # Penalize large feet velocity for feet that are in contact with the ground.
-        return jnp.sum(jnp.square(foot_vel[:, :2]) * contact_filter.reshape((-1, 1)))
-
+        return jnp.sum(jnp.maximum(torques * joint_velocities, 0.0))
+    
+    def _reward_torques(self, torques: jax.Array) -> jax.Array:
+        # Penalize torques
+        return jnp.sqrt(jnp.sum(jnp.square(torques))) + jnp.sum(jnp.abs(torques))
+    
     def _reward_termination(self, done: jax.Array, step: jax.Array) -> jax.Array:
         return done & (step < 500)
 
@@ -563,7 +416,7 @@ envs.register_environment('unitree_go2', UnitreeGo2Env)
 
 
 def main(argv=None):
-    env = UnitreeGo2Env()
+    env = UnitreeGo2Env(velocity_target=0.0, filename='unitree_go2/scene_mjx.xml')
     rng = jax.random.PRNGKey(0)
 
     reset_fn = jax.jit(env.reset)

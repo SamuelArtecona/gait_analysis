@@ -11,7 +11,7 @@ import optax
 import wandb
 import orbax.checkpoint as ocp
 
-from src.envs import unitree_go2_vertical as unitree_go2
+from src.envs import unitree_go2_gait as unitree_go2
 from src.algorithms.ppo import network_utilities as ppo_networks
 from src.algorithms.ppo.loss_utilities import loss_function
 from src.distribution_utilities import ParametricDistribution
@@ -48,7 +48,7 @@ def main(argv=None):
         tracking_forward_velocity=2.0,
         lateral_velocity=-1.0,
         angular_velocity=-1.0,
-        linear_z_velocity=-1.0,
+        linear_z_velocity=0.0,
         mechanical_power=-2e-3,
         torque=-2e-4,
         termination=-1.0,
@@ -75,7 +75,7 @@ def main(argv=None):
         normalize_advantages=True,
     )
     training_metadata = checkpoint_utilities.training_metadata(
-        num_epochs=20,
+        num_epochs=1,
         num_training_steps=20,
         episode_length=1000,
         num_policy_steps=25,
@@ -138,6 +138,7 @@ def main(argv=None):
         filename='unitree_go2/scene_barkour_hfield_mjx.xml',
         config=reward_config,
     )
+    #render
     render_env = unitree_go2.UnitreeGo2Env(
         velocity_target=velocity_target,
         filename='unitree_go2/scene_barkour_hfield_mjx.xml',
@@ -216,8 +217,10 @@ def main(argv=None):
         randomization_fn=randomization_fn,
         checkpoint_fn=checkpoint_fn,
         wandb=run,
+        #render
         render_environment=render_env,
         render_interval=5,
+        #
         restored_checkpoint=restored_checkpoint,
     )
 

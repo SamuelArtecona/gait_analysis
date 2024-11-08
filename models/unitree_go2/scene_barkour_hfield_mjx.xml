@@ -25,6 +25,8 @@
     <geom name="floor" type="hfield" hfield="hfield" conaffinity="1" material="groundplane"/>
   </worldbody>
 
+  <!-- First 7 Is body, FL (3), FR (3), HL (3), HR (3) -->
+  <!-- qpos: x y z w x y z -->
   <keyframe>
     <key name="home" qpos="0 0 0.35 1 0 0 0 0 0.9 -1.8 0 0.9 -1.8 0 0.9 -1.8 0 0.9 -1.8"
       ctrl="0 0.9 -1.8 0 0.9 -1.8 0 0.9 -1.8 0 0.9 -1.8"/>
