@@ -14,9 +14,9 @@
     <texture type="2d" name="groundplane" builtin="checker" mark="edge" rgb1="0.2 0.3 0.4" rgb2="0.1 0.2 0.3"
       markrgb="0.8 0.8 0.8" width="300" height="300"/>
     <material name="groundplane" texture="groundplane" texuniform="true" texrepeat="5 5" reflectance="0.2"/>
-    <!-- <hfield name="hfield" file="assets/hfield_barkour.png" size="10 10 .05 0.1"/> -->
+    <hfield name="hfield" file="assets/hfield_barkour.png" size="10 10 .05 0.1"/>
     <!-- <hfield name="hfield" file="assets/hfield_barkour.png" size="20 20 .075 0.1"/> -->
-    <hfield name="hfield" file="assets/hfield_barkour.png" size="30 30 0.1 0.1"/>
+    <!-- <hfield name="hfield" file="hfield_barkour.png" size="30 30 0.1 0.1"/> -->
   </asset>
 
   <worldbody>
@@ -27,9 +27,14 @@
 
   <!-- First 7 Is body, FL (3), FR (3), HL (3), HR (3) -->
   <!-- qpos: x y z w x y z -->
-  <keyframe>
+  <!-- <keyframe>
     <key name="home" qpos="0 0 0.35 1 0 0 0 0 0.9 -1.8 0 0.9 -1.8 0 0.9 -1.8 0 0.9 -1.8"
       ctrl="0 0.9 -1.8 0 0.9 -1.8 0 0.9 -1.8 0 0.9 -1.8"/>
+  </keyframe> -->
+  
+  <keyframe>
+    <key name="home" qpos="0 0 0.3 1 0 0 0 0 0.92 -1.84 0 0.92 -1.84 0 0.92 -1.84 0 0.92 -1.84"
+      ctrl="0 0.92 -1.84 0 0.92 -1.84 0 0.92 -1.84 0 0.92 -1.84"/>
   </keyframe>
 
 </mujoco>

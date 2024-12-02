@@ -129,14 +129,14 @@ class UnitreeGo2Env(PipelineEnv):
         self.default_ctrl = jnp.array(sys.mj_model.keyframe('home').ctrl)
 
         # Set Custom Pose and Ctrl:
-        self.initial_body = jnp.array([0, 0, 0.4, 1, 0, 0, 0])
-        self.default_pose = jnp.array(
-            [0.0, 0.0, 0.0] * 4,
-        )
-        self.default_ctrl = self.default_pose
-        self.init_q = jnp.concatenate([
-            self.initial_body, self.default_pose,
-        ])
+        # self.initial_body = jnp.array([0, 0, 0.285, 1, 0, 0, 0])
+        # self.default_pose = jnp.array(
+        #     [0.0, 0.9, -1.8] * 4,
+        # )
+        # self.default_ctrl = self.default_pose
+        # self.init_q = jnp.concatenate([
+        #     self.initial_body, self.default_pose,
+        # ])
 
         # Joint and Control Limits:
         self.joint_lb = jnp.array([
@@ -416,7 +416,7 @@ envs.register_environment('unitree_go2', UnitreeGo2Env)
 
 
 def main(argv=None):
-    env = UnitreeGo2Env(velocity_target=0.0, filename='unitree_go2/scene_mjx.xml')
+    env = UnitreeGo2Env(velocity_target=0.0, filename='unitree_go2/scene_barkour_hfield_mjx.xml')
     rng = jax.random.PRNGKey(0)
 
     reset_fn = jax.jit(env.reset)

@@ -75,7 +75,7 @@ def main(argv=None):
         normalize_advantages=True,
     )
     training_metadata = checkpoint_utilities.training_metadata(
-        num_epochs=1,
+        num_epochs=27,
         num_training_steps=20,
         episode_length=1000,
         num_policy_steps=25,
